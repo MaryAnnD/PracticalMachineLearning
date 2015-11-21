@@ -1,0 +1,79 @@
+---
+title: "Machine Learning Project"
+author: "Mary Ann D"
+date: "November 21, 2015"
+output: html_document
+---
+##Executive Summary
+The goal of the project is to predict the manner in which the participants in a fitness study performed their excercises.  The data is provided in 2 files: training set and test set.  The "classe" variable in the training set is the predictor.
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har.  
+
+###Data Processing
+Create the environment and load the training data set.
+```{r }
+library(knitr)
+opts_chunk$set(fig.width=12,fig.height=6,cache=TRUE,cache.path="cache/",fig.path="Figs/")
+library(caret)
+library(AppliedPredictiveModeling)
+library(randomForest)
+### Read the training data
+trnfileUrl<- "pml-training.csv"
+traindat<- read.csv(trnfileUrl, header=TRUE,sep = ",",na.strings = c("NA", "#DIV/0!","","-"))
+```
+###Exploratory Data Analysis
+After loading the training data set, review the data and transform and coerce the data as neccesary.  The Data is a large data set of a mix of values and will be subsetted into a data set that is usable for fitting a model.
+```{r }
+removedat = is.na(traindat)     # Determine which variables are NA
+keepcol<- nrow(traindat)*0.75 
+removecol<- which( colSums(removedat)> keepcol)  #Flag the columns that are more than 75% not applicable
+alldat = traindat[, -removecol]  # Remove those columns
+alldat <- alldat[, -(1:7)]    # Remove the first 7 columns
+table(sapply(alldat[1,], class))  # coerce the data
+```
+###Build the Regression Models  
+####Split the data 
+Split the training data and use the smaller portion as the Cross Validation data. 
+```{r }
+set.seed(1000)
+inTrain <- createDataPartition(y=alldat$classe, p=0.6, list=FALSE)
+mytrain <- alldat[inTrain, ]
+myCV <- alldat[-inTrain, ]
+```
+####Model Prediction
+I used the random forest model since it the most widely used model for large data sets.
+Random forests correct for decision trees' habit of overfitting to their training set per the documentation. 
+```{r }
+modFit<- randomForest(classe ~., data= mytrain)
+```
+To see how accurate the model is, predict the model on the Cross Validation data.
+```{r }
+predictrf<- predict(modFit, myCV, type="class")
+confusionMatrix(predictrf, myCV$classe)
+```
+We see that this model is 99% accurate
+and the OOS(Out of Sample) rate is about .01%
+  
+  
+##Appendix
+Apply the model to the Test data provided. Read and process the data in the same way that the training data was evaluated. Code provided
+```{r }
+TestfileUrl<- "pml-testing.csv"
+testdat<- read.csv(TestfileUrl, header=TRUE,sep = ",",na.strings = c("NA", "#DIV/0!","","-"))
+### Subset and transform the data
+removedat = is.na(testdat)
+keepcol<- nrow(testdat)*0.75
+removecol<- which( colSums(removedat)> keepcol)
+tstalldat = testdat[, -removecol]
+tstalldat <- tstalldat[, -(1:7)]
+table(sapply(tstalldat[1,], class))
+### Run the model on the Test Data
+predicttst<- predict(modFit, tstalldat, type="class")
+pml_write_files = function(x){
+   n = length(x)
+   for(i in 1:n){
+      filename = paste0("problem_id_",i,".txt")
+      write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+   }
+}
+pml_write_files(predicttst)
+```
